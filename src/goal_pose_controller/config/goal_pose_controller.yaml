@@ -1,0 +1,11 @@
+goal_pose_controller:
+  ros__parameters:
+
+    
+    kp_x: 0.5
+    kp_y: 0.5
+    kp_yaw: 1.0
+
+    max_vx: 0.4
+    max_vy: 0.3
+    max_omega: 0.5

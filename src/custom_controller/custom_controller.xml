@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<library path="custom_controller">
+
+  <class
+    name="custom_controller/CustomController"
+    type="custom_controller::CustomController"
+    base_class_type="controller_interface::ControllerInterface">
+
+    <description>
+      Custom ROS 2 controller for the omnidirectional robot.
+    </description>
+
+  </class>
+
+</library>

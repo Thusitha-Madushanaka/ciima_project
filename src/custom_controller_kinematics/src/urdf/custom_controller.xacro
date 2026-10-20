@@ -1,0 +1,303 @@
+<?xml version="1.0"?>
+
+<robot name= "custom_controller" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================= -->
+  <!-- CIIMA ROBOT                                       -->
+  <!-- 2 active omni wheels + 4 passive caster wheels   -->
+  <!-- ================================================= -->
+
+  <xacro:macro name="ciima_robot" params="prefix">
+
+    <!-- ================================================= -->
+    <!-- BASE                                              -->
+    <!-- ================================================= -->
+
+    <link name="${prefix}_base_link">
+
+      <visual>
+        <origin xyz="0 0 0.10" rpy="0 0 0"/>
+
+        <geometry>
+          <box size="0.80 0.60 0.20"/>
+        </geometry>
+
+        <material name="base_material">
+          <color rgba="0.5 0.5 0.5 1"/>
+        </material>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0.10" rpy="0 0 0"/>
+
+        <geometry>
+          <box size="0.80 0.60 0.20"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+
+    <!-- ================================================= -->
+    <!-- FRONT LEFT CASTER                                 -->
+    <!-- ================================================= -->
+
+    <link name="${prefix}_front_left_caster_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+
+        <geometry>
+          <cylinder radius="0.06" length="0.04"/>
+        </geometry>
+
+        <material name="caster_material">
+          <color rgba="0.2 0.2 0.2 1"/>
+        </material>
+      </visual>
+
+    </link>
+
+    <joint
+      name="${prefix}_front_left_caster_joint"
+      type="continuous">
+
+      <origin
+        xyz="0.30 0.22 0.0"
+        rpy="0 0 0"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_front_left_caster_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+    </joint>
+
+
+    <!-- ================================================= -->
+    <!-- FRONT RIGHT CASTER                                -->
+    <!-- ================================================= -->
+
+    <link name="${prefix}_front_right_caster_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+
+        <geometry>
+          <cylinder radius="0.06" length="0.04"/>
+        </geometry>
+
+        <material name="caster_material">
+          <color rgba="0.2 0.2 0.2 1"/>
+        </material>
+      </visual>
+
+    </link>
+
+    <joint
+      name="${prefix}_front_right_caster_joint"
+      type="continuous">
+
+      <origin
+        xyz="0.30 -0.22 0.0"
+        rpy="0 0 0"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_front_right_caster_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+    </joint>
+
+
+    <!-- ================================================= -->
+    <!-- REAR LEFT CASTER                                  -->
+    <!-- ================================================= -->
+
+    <link name="${prefix}_rear_left_caster_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+
+        <geometry>
+          <cylinder radius="0.06" length="0.04"/>
+        </geometry>
+
+        <material name="caster_material">
+          <color rgba="0.2 0.2 0.2 1"/>
+        </material>
+      </visual>
+
+    </link>
+
+    <joint
+      name="${prefix}_rear_left_caster_joint"
+      type="continuous">
+
+      <origin
+        xyz="-0.30 0.22 0.0"
+        rpy="0 0 0"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_rear_left_caster_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+    </joint>
+
+
+    <!-- ================================================= -->
+    <!-- REAR RIGHT CASTER                                 -->
+    <!-- ================================================= -->
+
+    <link name="${prefix}_rear_right_caster_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+
+        <geometry>
+          <cylinder radius="0.06" length="0.04"/>
+        </geometry>
+
+        <material name="caster_material">
+          <color rgba="0.2 0.2 0.2 1"/>
+        </material>
+      </visual>
+
+    </link>
+
+    <joint
+      name="${prefix}_rear_right_caster_joint"
+      type="continuous">
+
+      <origin
+        xyz="-0.30 -0.22 0.0"
+        rpy="0 0 0"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_rear_right_caster_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+    </joint>
+
+
+    <!-- ================================================= -->
+    <!-- ACTIVE OMNI WHEEL 1                              -->
+    <!-- ================================================= -->
+
+    <link name="${prefix}_front_wheel_link">
+
+      <visual>
+
+        <origin
+          xyz="0 0 0"
+          rpy="1.5708 0 0"/>
+
+        <geometry>
+          <cylinder
+            radius="0.10"
+            length="0.06"/>
+        </geometry>
+
+        <material name="wheel_material">
+          <color rgba="0.1 0.1 0.1 1"/>
+        </material>
+
+      </visual>
+
+    </link>
+
+
+    <joint
+      name="${prefix}_front_wheel_joint"
+      type="continuous">
+
+      <origin
+        xyz="0.15 0 0.10"
+        rpy="0 0 0"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_front_wheel_link"/>
+
+      <axis
+        xyz="0 1 0"/>
+
+    </joint>
+
+
+    <!-- ================================================= -->
+    <!-- ACTIVE OMNI WHEEL 2                              -->
+    <!-- ================================================= -->
+
+    <link name="${prefix}_rear_wheel_link">
+
+      <visual>
+
+        <origin
+          xyz="0 0 0"
+          rpy="1.5708 0 0"/>
+
+        <geometry>
+          <cylinder
+            radius="0.10"
+            length="0.06"/>
+        </geometry>
+
+        <material name="wheel_material">
+          <color rgba="0.1 0.1 0.1 1"/>
+        </material>
+
+      </visual>
+
+    </link>
+
+
+    <joint
+      name="${prefix}_rear_wheel_joint"
+      type="continuous">
+
+      <origin
+        xyz="-0.15 0 0.10"
+        rpy="0 0 0"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_rear_wheel_link"/>
+
+      <axis
+        xyz="0 1 0"/>
+
+    </joint>
+
+  </xacro:macro>
+
+
+  <!-- ================================================= -->
+  <!-- CREATE THE ROBOT                                  -->
+  <!-- ================================================= -->
+
+  <xacro:ciima_robot prefix="ciima"/>
+
+</robot>

@@ -1,0 +1,234 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro">
+
+  <xacro:macro name="ciima_robot" params="prefix">
+
+    <!-- ====================================================== -->
+    <!-- BASE LINK -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_base_link">
+
+      <visual>
+        <origin xyz="0 0 0.15" rpy="0 0 -1.5708"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/base_link.STL"/>
+        </geometry>
+        <material name="chassis_material">
+          <color rgba="0.25 0.25 0.25 1.0"/>
+        </material>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0.15" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.80 0.50 0.30"/>
+        </geometry>
+      </collision>
+
+    </link> 
+
+
+    <!-- ====================================================== -->
+    <!-- FRONT STEER LINK -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_front_steer_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="1.5708 0 1.5708"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/front_steer_link.STL"/>
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/front_steer_link.STL"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+
+    <!-- ====================================================== -->
+    <!-- FRONT STEER JOINT -->
+    <!-- ====================================================== -->
+
+    <joint
+      name="${prefix}_front_steer_joint"
+      type="continuous">
+
+      <origin
+        xyz="0.36 0 0.0475"
+        rpy="0.0 0 3.14159"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_front_steer_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+      <limit
+        lower="0"
+        upper="0"
+        effort="0"
+        velocity="0"/>
+
+    </joint>
+
+
+    <!-- ====================================================== -->
+    <!-- FRONT WHEEL -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_front_wheel_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/front_wheel_link.STL"/>
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/front_wheel_link.STL"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+
+    <!-- ====================================================== -->
+    <!-- FRONT WHEEL JOINT -->
+    <!-- ====================================================== -->
+
+    <joint
+      name="${prefix}_front_wheel_joint"
+      type="continuous">
+
+      <origin
+        xyz="0 0.025 0"
+        rpy="1.5708 -0.57181 0"/>
+
+      <parent
+        link="${prefix}_front_steer_link"/>
+
+      <child
+        link="${prefix}_front_wheel_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+    </joint>
+
+
+    <!-- ====================================================== -->
+    <!-- REAR STEER LINK -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_rear_steer_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="1.5708 0 1.5708"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/rear_steer_link.STL"/>
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/rear_steer_link.STL"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+
+    <!-- ====================================================== -->
+    <!-- REAR STEER JOINT -->
+    <!-- ====================================================== -->
+
+    <joint
+      name="${prefix}_rear_steer_joint"
+      type="continuous">
+
+      <origin
+        xyz="-0.36 0 0.0475"
+        rpy="0.0 0 3.14159"/>
+
+      <parent
+        link="${prefix}_base_link"/>
+
+      <child
+        link="${prefix}_rear_steer_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+      <limit
+        lower="0"
+        upper="0"
+        effort="0"
+        velocity="0"/>
+
+    </joint>
+
+
+    <!-- ====================================================== -->
+    <!-- REAR WHEEL LINK -->
+    <!-- ====================================================== -->
+
+    <link name="${prefix}_rear_wheel_link">
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/rear_wheel_link.STL"/>
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://ciima_description/meshes/rear_wheel_link.STL"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+
+    <!-- ====================================================== -->
+    <!-- REAR WHEEL JOINT -->
+    <!-- ====================================================== -->
+
+    <joint
+      name="${prefix}_rear_wheel_joint"
+      type="continuous">
+
+      <origin
+        xyz="0 0.025 0"
+        rpy="1.5708 0.56637 0.0"/>
+
+      <parent
+        link="${prefix}_rear_steer_link"/>
+
+      <child
+        link="${prefix}_rear_wheel_link"/>
+
+      <axis
+        xyz="0 0 1"/>
+
+    </joint>
+
+
+  </xacro:macro>
+
+</robot>

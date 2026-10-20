@@ -1,0 +1,159 @@
+```xml
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:macro name="fake_robot" params="prefix">
+
+  <!-- ========================================================= -->
+  <!-- BASE LINK / CHASSIS                                       -->
+  <!-- ========================================================= -->
+
+  <link name="${prefix}_base_link">
+
+    <inertial>
+      <mass value="1.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="1" ixy="0" ixz="0"
+               iyy="1" iyz="0"
+               izz="1"/>
+    </inertial>
+
+    <!-- CHASSIS VISUAL -->
+    <visual>
+      <origin xyz="0 0 0.10" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.80 0.50 0.20"/>
+      </geometry>
+      <material name="chassis_material">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+
+    <!-- CHASSIS COLLISION -->
+    <collision>
+      <origin xyz="0 0 0.10" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.80 0.50 0.20"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <!-- ========================================================= -->
+  <!-- WHEEL LINKS                                                -->
+  <!-- ========================================================= -->
+
+  <link name="${prefix}_front_steer_link"/>
+
+  <link name="${prefix}_rear_steer_link"/>
+
+
+  <!-- FRONT ACTIVE WHEEL -->
+
+  <link name="${prefix}_front_wheel_link">
+
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.0725" length="0.04"/>
+      </geometry>
+      <material name="wheel_material">
+        <color rgba="0.05 0.05 0.05 1.0"/>
+      </material>
+    </visual>
+
+  </link>
+
+
+  <!-- REAR ACTIVE WHEEL -->
+
+  <link name="${prefix}_rear_wheel_link">
+
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.0725" length="0.04"/>
+      </geometry>
+      <material name="wheel_material">
+        <color rgba="0.05 0.05 0.05 1.0"/>
+      </material>
+    </visual>
+
+  </link>
+
+
+  <!-- ========================================================= -->
+  <!-- STEERING JOINTS                                            -->
+  <!-- ========================================================= -->
+
+  <joint name="${prefix}_front_steer_joint" type="revolute">
+
+    <parent link="${prefix}_base_link"/>
+    <child link="${prefix}_front_steer_link"/>
+
+    <!-- Front OmniDrive position -->
+    <origin xyz="0.36 0 0.0"/>
+
+    <axis xyz="0 0 1"/>
+
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="10"
+      velocity="5"/>
+
+  </joint>
+
+
+  <joint name="${prefix}_rear_steer_joint" type="revolute">
+
+    <parent link="${prefix}_base_link"/>
+    <child link="${prefix}_rear_steer_link"/>
+
+    <!-- Rear OmniDrive position -->
+    <origin xyz="-0.36 0 0.0"/>
+
+    <axis xyz="0 0 1"/>
+
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="10"
+      velocity="5"/>
+
+  </joint>
+
+
+  <!-- ========================================================= -->
+  <!-- WHEEL JOINTS                                               -->
+  <!-- ========================================================= -->
+
+  <joint name="${prefix}_front_wheel_joint" type="continuous">
+
+    <parent link="${prefix}_front_steer_link"/>
+    <child link="${prefix}_front_wheel_link"/>
+
+    <origin xyz="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+  </joint>
+
+
+  <joint name="${prefix}_rear_wheel_joint" type="continuous">
+
+    <parent link="${prefix}_rear_steer_link"/>
+    <child link="${prefix}_rear_wheel_link"/>
+
+    <origin xyz="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+  </joint>
+
+
+</xacro:macro>
+
+</robot>
+```

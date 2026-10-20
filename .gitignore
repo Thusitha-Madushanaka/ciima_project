@@ -1,0 +1,25 @@
+build/
+install/
+log/
+
+*.pyc
+__pycache__/
+
+.vscode/
+.idea/
+
+*.swp
+*.swo
+
+
+# Additional generated files
+*.egg-info/
+.pytest_cache/
+.DS_Store
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.backup
+*.save
+src/trajectory_planner/trajectory_planner/backup.txt

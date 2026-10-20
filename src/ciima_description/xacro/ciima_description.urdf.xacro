@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="robot">
+
+    <xacro:include filename="$(find ciima_description)/xacro/ros2_control.xacro"/>
+    <xacro:include filename="$(find ciima_description)/xacro/ciima_description.xacro"/>
+    <!-- <xacro:include filename="$(find ibt_ros2_bringup_tracked_robot)/configs/fake_robot.xacro"/> -->
+
+    <xacro:ros2_control_system/>
+    <xacro:ciima_robot prefix="fake_robot"/>
+    <!-- <xacro:fake_robot  prefix="fake_robot"/> -->
+
+</robot>

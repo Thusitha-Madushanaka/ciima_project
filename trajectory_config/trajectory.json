@@ -1,0 +1,48 @@
+{
+  "trajectory_name": "omnidirectional_route_test",
+  "commands": [
+    {
+      "move_to": {
+        "pose": "move_to_A",
+        "traj": "deterministic",
+        "movement_type": "omnidirectional"
+      }
+    },
+    {
+      "move_to": {
+        "pose": "move_to_B",
+        "traj": "deterministic",
+        "movement_type": "omnidirectional"
+      }
+    },
+    {
+      "move_to": {
+        "pose": "move_to_C",
+        "traj": "deterministic",
+        "movement_type": "omnidirectional"
+      }
+    },
+    {
+      "move_to": {
+        "pose": "move_to_D",
+        "traj": "deterministic",
+        "movement_type": "omnidirectional"
+      }
+    },
+    {
+      "move_to":{
+        "pose" : "move_to_E",
+        "traj" : "deterministic",
+        "movement_type" : "omnidirectional"
+      }
+
+    }, 
+    {
+      "move_to": {
+        "pose": "move_to_home",
+        "traj": "deterministic",
+        "movement_type": "omnidirectional"
+      }
+    }
+  ]
+}
