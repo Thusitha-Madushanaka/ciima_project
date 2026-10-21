@@ -36,7 +36,7 @@
         "movement_type" : "omnidirectional"
       }
 
-    }, 
+    },
     {
       "move_to": {
         "pose": "move_to_home",

@@ -1,5 +1,3 @@
-
-import asyncio
 import json
 import math
 import time
@@ -35,7 +33,6 @@ class GoalPoseController(Node):
         self.declare_parameter('steering_tolerance', 0.05)
         self.declare_parameter('action_timeout', 120.0)
 
-        # Read parameters
         self.kp_x = self.get_parameter('kp_x').value
         self.kp_y = self.get_parameter('kp_y').value
         self.kp_yaw = self.get_parameter('kp_yaw').value
@@ -94,14 +91,12 @@ class GoalPoseController(Node):
         self.active_movement_type = None
         self.action_start_yaw = None
         self.action_start_time = None
-
-        # Future used to wake the action callback from the control timer
+        self.action_use_target_yaw = False
         self.action_tick_future = None
 
-        # Existing state machine
         self.state = 'WAITING_FOR_GOAL'
 
-        # Load existing legacy goal mode
+        # Load legacy goal mode
         json_path = (
             Path.home()
             / 'ros2_ws'
@@ -110,7 +105,7 @@ class GoalPoseController(Node):
         )
 
         try:
-            with open(json_path, 'r') as file:
+            with open(json_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
 
             self.goal_mode = data['goal']['type']
@@ -126,7 +121,7 @@ class GoalPoseController(Node):
                 f'Legacy goal mode: {self.goal_mode}'
             )
 
-        except Exception as exc:
+        except (OSError, ValueError, KeyError, TypeError) as exc:
             self.get_logger().warning(
                 f'Could not load goal configuration: {exc}. '
                 'Using normal mode.'
@@ -174,7 +169,6 @@ class GoalPoseController(Node):
 
     def get_yaw_from_pose(self, pose):
         q = pose.orientation
-
         return math.atan2(
             2.0 * (q.w * q.z + q.x * q.y),
             1.0 - 2.0 * (q.y * q.y + q.z * q.z)
@@ -209,7 +203,6 @@ class GoalPoseController(Node):
 
             if joint_name == 'fake_robot_front_steer_joint':
                 self.front_steer_angle = msg.position[i]
-
             elif joint_name == 'fake_robot_rear_steer_joint':
                 self.rear_steer_angle = msg.position[i]
 
@@ -218,7 +211,6 @@ class GoalPoseController(Node):
     # =========================================================
 
     def goal_callback(self, msg):
-        # Do not allow topic goals to overwrite an action goal.
         if self.active_goal_handle is not None:
             self.get_logger().warning(
                 'Ignoring /goal_pose because an action is active.'
@@ -250,11 +242,9 @@ class GoalPoseController(Node):
                 if distance > self.position_tolerance
                 else 'GOAL_REACHED'
             )
-
         elif distance > self.position_tolerance:
             self.travel_yaw = math.atan2(dy, dx)
             self.state = 'ROTATE_TO_TRAVEL'
-
         else:
             self.travel_yaw = None
             self.state = 'ROTATE_TO_GOAL'
@@ -266,7 +256,7 @@ class GoalPoseController(Node):
         self.get_logger().info(f'State: {self.state}')
 
     # =========================================================
-    # Trajectory action callbacks
+    # Action callbacks
     # =========================================================
 
     def action_goal_callback(self, goal_request):
@@ -277,7 +267,8 @@ class GoalPoseController(Node):
             'rotate',
             'shift',
             'combined',
-            'diagonal'
+            'diagonal',
+            'omnidirectional'
         )
 
         if movement_type not in supported_types:
@@ -313,91 +304,89 @@ class GoalPoseController(Node):
         request = goal_handle.request
         movement_type = request.movement_type.strip().lower()
 
+        # Snapshot the initial pose before configuring the action.
+        if (
+            self.current_x is None
+            or self.current_y is None
+            or self.current_yaw is None
+        ):
+            result.success = False
+            result.message = 'Odometry is not available.'
+            goal_handle.abort()
+            return result
+
         self.active_goal_handle = goal_handle
         self.active_movement_type = movement_type
         self.action_start_yaw = self.current_yaw
         self.action_start_time = time.monotonic()
+        self.action_use_target_yaw = request.use_target_yaw
 
         try:
-            if (
-                self.current_x is None
-                or self.current_y is None
-                or self.current_yaw is None
-            ):
-                result.success = False
-                result.message = 'Odometry is not available.'
-                goal_handle.abort()
-                return result
-
             self.goal_x = request.target_pose.pose.position.x
             self.goal_y = request.target_pose.pose.position.y
-            self.goal_yaw = self.get_yaw_from_pose(
+            requested_yaw = self.get_yaw_from_pose(
                 request.target_pose.pose
             )
 
-            # Rotation is performed at the robot's current position.
             if movement_type == 'rotate':
+                # Rotation only: remain at the current position.
                 self.goal_x = self.current_x
                 self.goal_y = self.current_y
+                self.goal_yaw = requested_yaw
 
-            # Forward, shift and diagonal preserve the starting yaw.
-            if movement_type in ('forward', 'shift', 'diagonal'):
+            elif request.use_target_yaw:
+                self.goal_yaw = requested_yaw
+
+            else:
+                # Position-only goal: preserve starting orientation.
                 self.goal_yaw = self.action_start_yaw
 
-                dx = self.goal_x - self.current_x
-                dy = self.goal_y - self.current_y
-                local_x, local_y = self.world_error_to_robot(dx, dy)
+            # Validate constrained movement types.
+            dx = self.goal_x - self.current_x
+            dy = self.goal_y - self.current_y
+            local_x, local_y = self.world_error_to_robot(dx, dy)
 
-                if movement_type == 'shift':
-                    self.get_logger().info(
-                        f'Shift validation: dx={dx:.4f}, dy={dy:.4f}, '
-                        f'yaw={self.current_yaw:.4f}, '
-                        f'local_x={local_x:.4f}, '
-                        f'local_y={local_y:.4f}'
+            if movement_type == 'forward':
+                if (
+                    abs(local_y) > self.position_tolerance
+                    or local_x < -self.position_tolerance
+                ):
+                    result.success = False
+                    result.message = (
+                        'Forward target is not along the current '
+                        'forward direction.'
                     )
+                    goal_handle.abort()
+                    return result
 
-                if movement_type == 'forward':
-                    if (
-                        abs(local_y) > self.position_tolerance
-                        or local_x < -self.position_tolerance
-                    ):
-                        result.success = False
-                        result.message = (
-                            'Forward target is not along the current '
-                            'forward direction.'
-                        )
-                        goal_handle.abort()
-                        return result
+            elif movement_type == 'shift':
+                if abs(local_x) > self.position_tolerance:
+                    result.success = False
+                    result.message = (
+                        'Shift target is not along the current '
+                        'lateral direction.'
+                    )
+                    goal_handle.abort()
+                    return result
 
-                elif movement_type == 'shift':
-                    if abs(local_x) > self.position_tolerance:
-                        result.success = False
-                        result.message = (
-                            'Shift target is not along the current '
-                            'lateral direction.'
-                        )
-                        goal_handle.abort()
-                        return result
-
-                elif movement_type == 'diagonal':
-                    # A diagonal target must require displacement
-                    # along both robot-frame axes.
-                    if (
-                        abs(local_x) <= self.position_tolerance
-                        or abs(local_y) <= self.position_tolerance
-                    ):
-                        result.success = False
-                        result.message = (
-                            'Diagonal target must require both '
-                            'forward and lateral displacement.'
-                        )
-                        goal_handle.abort()
-                        return result
+            elif movement_type == 'diagonal':
+                if (
+                    abs(local_x) <= self.position_tolerance
+                    or abs(local_y) <= self.position_tolerance
+                ):
+                    result.success = False
+                    result.message = (
+                        'Diagonal target must require both '
+                        'forward and lateral displacement.'
+                    )
+                    goal_handle.abort()
+                    return result
 
             self.state = 'ACTION_CONTROL'
 
             self.get_logger().info(
-                f'Starting action: {movement_type}'
+                f'Starting action: {movement_type}, '
+                f'use_target_yaw={self.action_use_target_yaw}'
             )
 
             while rclpy.ok():
@@ -429,18 +418,13 @@ class GoalPoseController(Node):
 
                 feedback = ExecuteTrajectoryTarget.Feedback()
                 feedback.state = self.state
-
-                if movement_type == 'rotate':
-                    feedback.distance_remaining = 0.0
-                else:
-                    feedback.distance_remaining = math.hypot(
-                        self.goal_x - self.current_x,
-                        self.goal_y - self.current_y
-                    )
-
+                feedback.distance_remaining = math.hypot(
+                    self.goal_x - self.current_x,
+                    self.goal_y - self.current_y
+                )
                 goal_handle.publish_feedback(feedback)
 
-                # Wait for the next control timer tick.
+                # Wait for the next 20 Hz control timer tick.
                 self.action_tick_future = Future()
                 tick_future = self.action_tick_future
 
@@ -459,7 +443,6 @@ class GoalPoseController(Node):
             self.get_logger().error(
                 f'Trajectory execution failed: {exc}'
             )
-
             result.success = False
             result.message = f'Trajectory execution failed: {exc}'
 
@@ -474,6 +457,7 @@ class GoalPoseController(Node):
             self.active_movement_type = None
             self.action_start_yaw = None
             self.action_start_time = None
+            self.action_use_target_yaw = False
             self.action_tick_future = None
             self.state = 'WAITING_FOR_GOAL'
 
@@ -502,11 +486,20 @@ class GoalPoseController(Node):
 
         error_x_robot, error_y_robot = self.world_error_to_robot(dx, dy)
 
-        if movement_type == 'rotate':
-            yaw_error = self.normalize_angle(
-                self.goal_yaw - self.current_yaw
-            )
+        # Determine which heading the controller should maintain.
+        # modifying for the smoothness of yaw angle
+        desired_yaw = (
+            self.goal_yaw
+            if self.action_use_target_yaw
+            else self.action_start_yaw
+        )
 
+        yaw_error = self.normalize_angle(
+            desired_yaw - self.current_yaw
+        )
+
+        # Rotation-only action.
+        if movement_type == 'rotate':
             if abs(yaw_error) <= self.yaw_tolerance:
                 self.state = 'GOAL_REACHED'
                 self.stop_robot()
@@ -517,84 +510,67 @@ class GoalPoseController(Node):
                 -self.max_omega,
                 self.max_omega
             )
-
             self.publish_cmd_vel(0.0, 0.0, omega)
             return
 
-        if movement_type in ('forward', 'shift', 'diagonal'):
-            # Preserve the orientation at the beginning of the action.
-            yaw_error = self.normalize_angle(
-                self.action_start_yaw - self.current_yaw
-            )
+        # Check whether both requested position and heading are reached.
+        position_reached = distance <= self.position_tolerance
+        yaw_reached = abs(yaw_error) <= self.yaw_tolerance
 
-            if (
-                distance <= self.position_tolerance
-                and abs(yaw_error) <= self.yaw_tolerance
-            ):
-                self.state = 'GOAL_REACHED'
-                self.stop_robot()
-                return
-
-            omega = self.clamp(
-                self.kp_yaw * yaw_error,
-                -self.max_omega,
-                self.max_omega
-            )
-
-            if movement_type == 'forward':
-                vx = self.clamp(
-                    self.kp_x * error_x_robot,
-                    0.0,
-                    self.max_vx
-                )
-                self.publish_cmd_vel(vx, 0.0, omega)
-
-            elif movement_type == 'shift':
-                vy = self.clamp(
-                    self.kp_y * error_y_robot,
-                    -self.max_vy,
-                    self.max_vy
-                )
-                self.publish_cmd_vel(0.0, vy, omega)
-
-            else:  # diagonal
-                vx = self.clamp(
-                    self.kp_x * error_x_robot,
-                    -self.max_vx,
-                    self.max_vx
-                )
-                vy = self.clamp(
-                    self.kp_y * error_y_robot,
-                    -self.max_vy,
-                    self.max_vy
-                )
-                self.publish_cmd_vel(vx, vy, omega)
-
+        if position_reached and yaw_reached:
+            self.state = 'GOAL_REACHED'
+            self.stop_robot()
             return
 
-        if movement_type == 'combined':
-            yaw_error = self.normalize_angle(
-                self.goal_yaw - self.current_yaw
-            )
+        # Preserve the starting heading for position-only movement.
+        # If a target heading was requested, rotate while translating.
+        if movement_type in ('forward', 'shift', 'diagonal',
+                             'omnidirectional', 'combined'):
+            vx = 0.0
+            vy = 0.0
 
-            if (
-                distance <= self.position_tolerance
-                and abs(yaw_error) <= self.yaw_tolerance
-            ):
-                self.state = 'GOAL_REACHED'
-                self.stop_robot()
-                return
+            if not position_reached:
+                if movement_type == 'forward':
+                    vx = self.clamp(
+                        self.kp_x * error_x_robot,
+                        0.0,
+                        self.max_vx
+                    )
 
-            vx = self.clamp(
-                self.kp_x * error_x_robot,
-                -self.max_vx,
-                self.max_vx
-            )
-            vy = self.clamp(
-                self.kp_y * error_y_robot,
-                -self.max_vy,
-                self.max_vy
-            )
+                elif movement_type == 'shift':
+                    vy = self.clamp(
+                        self.kp_y * error_y_robot,
+                        -self.max_vy,
+                        self.max_vy
+                    )
+
+                elif movement_type == 'diagonal':
+                    vx = self.clamp(
+                        self.kp_x * error_x_robot,
+                        -self.max_vx,
+                        self.max_vx
+                    )
+                    vy = self.clamp(
+                        self.kp_y * error_y_robot,
+                        -self.max_vy,
+                        self.max_vy
+                    )
+
+                else:
+                    # Omnidirectional and combined: correct both axes.
+                    vx = self.clamp(
+                        self.kp_x * error_x_robot,
+                        -self.max_vx,
+                        self.max_vx
+                    )
+                    vy = self.clamp(
+                        self.kp_y * error_y_robot,
+                        -self.max_vy,
+                        self.max_vy
+                    )
+
+            # Do not rotate once position is reached if only position
+            # was requested; otherwise correct the target heading.
             omega = self.clamp(
                 self.kp_yaw * yaw_error,
                 -self.max_omega,
@@ -604,7 +580,6 @@ class GoalPoseController(Node):
             self.publish_cmd_vel(vx, vy, omega)
             return
 
-        # Unexpected state: stop safely.
         self.stop_robot()
 
     # =========================================================
@@ -612,7 +587,7 @@ class GoalPoseController(Node):
     # =========================================================
 
     def control_loop(self):
-        # Wake the action callback on each 20 Hz control timer tick.
+        # Wake the action callback on each 20 Hz timer tick.
         if (
             self.action_tick_future is not None
             and not self.action_tick_future.done()
@@ -620,7 +595,7 @@ class GoalPoseController(Node):
             self.action_tick_future.set_result(None)
             self.action_tick_future = None
 
-        # Action control takes priority over the legacy topic controller.
+        # Action control takes priority over legacy topic control.
         if self.active_goal_handle is not None:
             self.control_action_goal()
             return
@@ -637,7 +612,7 @@ class GoalPoseController(Node):
             self.stop_robot()
             return
 
-        # Rotate toward the travel direction in legacy normal mode.
+        # Legacy normal mode: rotate toward the travel direction.
         if self.state == 'ROTATE_TO_TRAVEL':
             travel_error = self.normalize_angle(
                 self.travel_yaw - self.current_yaw
@@ -653,7 +628,6 @@ class GoalPoseController(Node):
                 -self.max_omega,
                 self.max_omega
             )
-
             self.publish_cmd_vel(0.0, 0.0, omega)
             return
 
@@ -667,12 +641,8 @@ class GoalPoseController(Node):
             ):
                 return
 
-            front_error = self.normalize_angle(
-                self.front_steer_angle
-            )
-            rear_error = self.normalize_angle(
-                self.rear_steer_angle
-            )
+            front_error = self.normalize_angle(self.front_steer_angle)
+            rear_error = self.normalize_angle(self.rear_steer_angle)
 
             if (
                 abs(front_error) <= self.steering_tolerance
@@ -739,7 +709,6 @@ class GoalPoseController(Node):
                 -self.max_omega,
                 self.max_omega
             )
-
             self.publish_cmd_vel(0.0, 0.0, omega)
             return
 
@@ -747,20 +716,14 @@ class GoalPoseController(Node):
             self.stop_robot()
 
 
-# =============================================================
-# Main
-# =============================================================
-
 def main(args=None):
     rclpy.init(args=args)
     node = GoalPoseController()
 
     try:
         rclpy.spin(node)
-
     except KeyboardInterrupt:
         pass
-
     finally:
         if rclpy.ok():
             node.stop_robot()

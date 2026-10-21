@@ -84,7 +84,7 @@ def generate_launch_description():
         name='goal_pose_controller',
         output='screen',
         parameters=[
-            #goal_pose_config
+            goal_pose_config
         ]   
     )
 
