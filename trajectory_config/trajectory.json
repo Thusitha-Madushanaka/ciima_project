@@ -38,6 +38,23 @@
 
     },
     {
+      "move_to":{
+        "pose": "move_to_F",
+        "traj": "deterministic",
+        "movement_type": "omnidirectional"
+      }
+
+    },
+    
+    {
+      "move_to":{
+        "pose" : "move_to_G",
+        "traj" : "deterministic",
+        "movement_type": "omnidirectional"
+      }
+
+    },
+    {
       "move_to": {
         "pose": "move_to_home",
         "traj": "deterministic",
