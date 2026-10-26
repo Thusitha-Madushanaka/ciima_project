@@ -2,8 +2,8 @@
 
 ## Overview
 
-This project contains the ROS 2 implementation of a mobile robot
-with two active steerable OmniDrive modules.
+This project contains the ROS 2 implementation of a omnidirectional mobile robot.
+
 
 It includes:
 - Custom ROS 2 controller
@@ -28,8 +28,10 @@ Additional ROS 2 dependencies may be required.
 Open a terminal:
 
     cd ~
-    git clone <REPOSITORY_URL> ros2_ws  ## include the name of workspace you work on it
+    git clone <REPOSITORY_URL> ros2_ws  
     cd ~/ros2_ws
+
+Note: for the workspace section include the workspace name you working on it
 
 Replace <REPOSITORY_URL> with the Git repository URL.
 
