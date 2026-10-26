@@ -1,8 +1,11 @@
 # CIIMA ROS 2 Mobile Robot Controller
 
-ROS 2 Humble project for a mobile robot with two active steerable OmniDrive modules. This repository includes a custom `ros2_control` controller, kinematics/odometry, robot description and meshes, goal-pose controller, JSON trajectory planner, RViz configuration, and an experimental GUI.
-
-**Scope:** The procedure below demonstrates the controller and JSON trajectory in RViz. RViz is not a physics simulator. This guide does not cover Gazebo, Siemens ArgoDrive simulation, or commissioning a physical robot.
+It Includes:
+  1. custom_controller_kinematics
+  2. custom_controller
+  3. bringup files
+  4. goal_pose_controller
+  5. JSON files - Trajectory implementation 
 
 ## 1. Supported environment
 
@@ -67,10 +70,6 @@ These are the core tools for the demonstrated workflow, **not a verified exhaust
 
 ## 3. Clone the project
 
-The repository is private: request collaborator access from its owner before cloning.
-
-**Important:** The trajectory planner's current default JSON paths require the workspace directory to be named `~/ros2_ws`.
-
 ```bash
 cd ~
 git clone https://github.com/Thusitha-Madushanaka/ciima_project.git ros2_ws
@@ -80,7 +79,7 @@ cd ~/ros2_ws
 Expected workspace layout:
 
 ```text
-ros2_ws/
+workspace_name/
 ├── src/
 │   ├── ciima_bringup/                 # ROS package name: bringup
 │   ├── ciima_description/
@@ -98,14 +97,12 @@ ros2_ws/
 ## 4. Resolve dependencies and build
 
 ```bash
-cd ~/ros2_ws
+cd ~/workspace_name
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
 colcon build --symlink-install --event-handlers console_direct+
 source install/setup.bash
 ```
-
-**Dependency caveat:** Some package manifests declare additional Nav2, SLAM, scanner, or camera-related dependencies that are not needed by the current RViz launch. `rosdep` may attempt to install these anyway. If dependency resolution fails, retain the full error message and determine whether the dependency is actually needed; do not delete package declarations blindly. The full clean-machine dependency installation has not yet been independently validated.
 
 Check that the packages are discoverable:
 
@@ -120,7 +117,7 @@ Expected package names: `bringup`, `ciima_description`, `custom_controller`, `cu
 In **Terminal 1**:
 
 ```bash
-cd ~/ros2_ws
+cd ~/workspace_name
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch bringup bringup.launch.py
@@ -133,7 +130,7 @@ Wait for RViz to show the robot and for `custom_controller` and `joint_state_bro
 In **Terminal 2**:
 
 ```bash
-cd ~/ros2_ws
+cd ~/workspace_name
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 run trajectory_planner trajectory_planner
@@ -141,36 +138,8 @@ ros2 run trajectory_planner trajectory_planner
 
 The current planner uses `execute_on_start=True` and automatically sends the trajectory once the `/execute_trajectory_target` action server is ready.
 
-The JSON files are:
 
-- `~/ros2_ws/trajectory_config/trajectory.json`: ordered movement commands
-- `~/ros2_ws/trajectory_config/poses.json`: named target positions
-
-The supplied test sequence is A → B → C → D → E → Home, with these targets in the `odom` frame (x/y in metres, yaw in radians):
-
-| Target | x | y | yaw |
-| --- | ---: | ---: | ---: |
-| A | 2.0 | 0.0 | 0.0 |
-| B | 0.0 | 2.0 | 0.0 |
-| C | 0.0 | 1.0 | 0.0 |
-| D | 0.5 | 0.5 | 0.0 |
-| E | 0.0 | 0.0 | 3.14 |
-| Home | 0.0 | 0.0 | 0.0 |
-
-Confirm that RViz displays the motion and the planner reports the six targets completed in order. This is a visualization/controller test, not a physical-dynamics validation.
-
-## 7. Troubleshooting
-
-- **`ros2: command not found`** — source `/opt/ros/humble/setup.bash` in that terminal.
-- **Package not found** — check the build succeeded and source `~/ros2_ws/install/setup.bash`.
-- **JSON file not found** — clone the repository as `~/ros2_ws` or update the planner's `trajectory_file` and `poses_file` parameters; cloning under a different folder name will not work with the defaults.
-- **Planner waits for server** — confirm Terminal 1 is running and `/execute_trajectory_target` is available.
-- **RViz robot missing** — inspect launch output, robot description, and RViz display settings.
-- **`rosdep` or build failure** — save the complete output, including the first error, OS version, and ROS distribution.
-
-Stop the trajectory planner with Ctrl+C in Terminal 2 and the launch with Ctrl+C in Terminal 1. **Ctrl+C is not a physical robot emergency stop.**
-
-### 7.1 CMake / `ament_cmake` errors on a fresh computer
+### 7 CMake / `ament_cmake` errors on a fresh computer
 
 If a build fails with a message such as:
 
@@ -209,12 +178,12 @@ A custom Python virtual environment, Conda environment, or unexpected `PYTHONPAT
 
 If CMake reports that another `*Config.cmake` file cannot be found, **copy the exact package name from the first error**. Source ROS and run `rosdep` first; the missing dependency may be specific to this project.
 
-### 7.2 Capture the exact failing package and first error
+### 7.1 Capture the exact failing package and first error
 
 Run the build with output printed directly to the terminal and also saved to a log:
 
 ```bash
-cd ~/ros2_ws
+cd ~/workspace_name
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --event-handlers console_direct+ 2>&1 | tee ~/ros2_build.log
 ```
@@ -224,7 +193,7 @@ Review the first `CMake Error`, `ModuleNotFoundError`, or `Failed <<<` message. 
 For a failed first attempt on a newly transferred workspace, also check that `build/`, `install/`, and `log/` were **not copied from another computer**. These are generated directories and should be rebuilt locally. If stale build artifacts are suspected, first save the error log and then, only in the transferred/test workspace, run:
 
 ```bash
-cd ~/ros2_ws
+cd ~/workspace_name
 rm -rf build install log
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --event-handlers console_direct+
@@ -232,7 +201,7 @@ colcon build --symlink-install --event-handlers console_direct+
 
 **Caution:** The cleanup deletes generated workspace artifacts. Do not use it on the original working development workspace unless you intend to rebuild everything.
 
-### 7.3 Information to include when asking for help
+### 7.2 Information to include when asking for help
 
 ```bash
 lsb_release -ds
@@ -244,21 +213,8 @@ colcon list --names-only
 
 Include the terminal output and the relevant portion of `~/ros2_build.log`. The exact build error observed on the independent tester's computer is **not yet known**, so the steps above are diagnostic suggestions, not a confirmed repair.
 
-## 8. Independent tester checklist
 
-Please report:
-
-- Ubuntu and ROS 2 versions used
-- Whether the repository cloned successfully
-- Whether dependency installation completed
-- Whether all eight packages built successfully
-- Whether RViz showed the robot
-- Whether all six JSON trajectory commands completed in order
-- Any errors, missing prerequisites, or unclear instructions
-
-**Validation status:** The developer has tested the controller/trajectory on the original Ubuntu workspace and has reported a successful build of a fresh clone on the same machine. A clean Ubuntu installation on a separate computer has **not yet been verified**. Treat the independent setup test as the next validation milestone.
-
-## 9. Repository updates
+## 8. Repository updates
 
 After modifying and testing code in `~/ros2_ws`:
 
@@ -271,6 +227,6 @@ git push
 
 On a separate test machine, update with `git pull` and rebuild using `colcon build --symlink-install`.
 
-## 10. Access and confidentiality
+## 9. Access and confidentiality
 
 This project is intended for authorized collaborators. Do not redistribute company code, robot models, or configuration files without the owner's approval. Private repository access must be granted explicitly.
