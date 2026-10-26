@@ -1,4 +1,4 @@
-# CIIMA ROS 2 Mobile Robot Controller
+# CIIMA ROS 2 Omnidirectional Autonomus Mobile Robot Controller
 
 It Includes:
   1. custom_controller_kinematics
@@ -119,6 +119,7 @@ In **Terminal 1**:
 ```bash
 cd ~/workspace_name
 source /opt/ros/humble/setup.bash
+colcon build --symlink-install
 source install/setup.bash
 ros2 launch bringup bringup.launch.py
 ```
