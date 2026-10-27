@@ -1,11 +1,10 @@
-
 import json
 import math
 from pathlib import Path
 
 import rclpy
-from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.node import Node
 
 from geometry_msgs.msg import PoseStamped
 from trajectory_interfaces.action import ExecuteTrajectoryTarget
@@ -18,25 +17,21 @@ class TrajectoryPlannerNode(Node):
 
         self.declare_parameter(
             'trajectory_file',
-            '~/ros2_ws/trajectory_config/trajectory.json'
+            str(Path.home() / 'ros2_ws/trajectory_config/trajectory.json')
         )
         self.declare_parameter(
             'poses_file',
-            '~/ros2_ws/trajectory_config/poses.json'
+            str(Path.home() / 'ros2_ws/trajectory_config/poses.json')
         )
-        self.declare_parameter('execute_on_start', False)
+        self.declare_parameter('execute_on_start', True) # set is as true to run automatically without argument
 
-        self.trajectory_file = Path(
-            self.get_parameter('trajectory_file').value
-        ).expanduser()
-
-        self.poses_file = Path(
-            self.get_parameter('poses_file').value
-        ).expanduser()
-
-        self.execute_on_start = (
-            self.get_parameter('execute_on_start').value
-        )
+        self.trajectory_file = self.get_parameter(
+            'trajectory_file'
+        ).value
+        self.poses_file = self.get_parameter('poses_file').value
+        self.execute_on_start = self.get_parameter(
+            'execute_on_start'
+        ).value
 
         self.action_client = ActionClient(
             self,
@@ -44,100 +39,48 @@ class TrajectoryPlannerNode(Node):
             '/execute_trajectory_target'
         )
 
-        self.targets = []
-        self.target_index = 0
-        self.sequence_active = False
-        self.sequence_started = False
-
-        self.start_timer = self.create_timer(
-            1.0,
-            self.startup_callback
-        )
-
-        self.get_logger().info('Trajectory planner started.')
-        self.get_logger().info(
-            'Action server: /execute_trajectory_target'
-        )
-
-        if not self.execute_on_start:
-            self.get_logger().info(
-                'Execution disabled. No movement commands will be sent.'
-            )
-
-    
-    def startup_callback(self):
-        if self.sequence_started:
-            return
-
-        # Wait for the action server, but do not send any goals
-        # unless execution has explicitly been enabled.
-        if not self.action_client.wait_for_server(
-            timeout_sec=0.1
-        ):
-            self.get_logger().info(
-                'Waiting for the trajectory action server...'
-            )
-            return
-
-        self.start_timer.cancel()
-        self.sequence_started = True
+        self.commands = []
+        self.current_index = 0
+        self.goal_in_progress = False
+        self.execution_started = False
 
         try:
-            self.load_trajectory()
-        except (
-            OSError,
-            ValueError,
-            KeyError,
-            TypeError,
-            AttributeError
-        ) as error:
+            self.load_configuration()
+        except (OSError, ValueError, KeyError, TypeError) as exc:
             self.get_logger().error(
-                f'Configuration error: {error}'
+                f'Could not load trajectory configuration: {exc}'
             )
-            return
-
-        if not self.targets:
-            self.get_logger().error(
-                'The trajectory contains no targets.'
-            )
-            return
+            raise
 
         if not self.execute_on_start:
             self.get_logger().info(
-                'DRY RUN: trajectory loaded and validated. '
-                'No movement goals were sent.'
+                'Dry-run mode: configuration validated; '
+                'no movement commands will be sent.'
             )
-            return
-
-        self.sequence_active = True
-        self.target_index = 0
-
-        self.get_logger().info(
-            f'Loaded {len(self.targets)} targets. '
-            'Starting trajectory execution.'
-        )
-
-        self.send_next_target()
-
-
-    def load_trajectory(self):
-        with self.trajectory_file.open(
-            'r', encoding='utf-8'
-        ) as file:
-            trajectory_config = json.load(file)
-
-        with self.poses_file.open(
-            'r', encoding='utf-8'
-        ) as file:
-            poses_config = json.load(file)
-
-        poses = poses_config['poses']
-        commands = trajectory_config['commands']
-
-        if not isinstance(commands, list):
-            raise ValueError(
-                '"commands" must be a JSON list.'
+            self.print_trajectory()
+        else:
+            self.get_logger().info(
+                'Execution enabled. Waiting for the action server.'
             )
+            self.start_timer = self.create_timer(
+                0.5, self.try_start_execution
+            )
+
+    def load_configuration(self):
+        with open(self.trajectory_file, 'r') as file:
+            trajectory = json.load(file)
+
+        with open(self.poses_file, 'r') as file:
+            pose_data = json.load(file)
+
+        poses = pose_data.get('poses', {})
+        raw_commands = trajectory.get('commands', [])
+
+        if not isinstance(poses, dict):
+            raise ValueError("'poses' must be a JSON object.")
+
+        if not isinstance(raw_commands, list) or not raw_commands:
+            raise ValueError("'commands' must be a non-empty list.")
 
         supported_types = {
             'forward',
@@ -145,225 +88,227 @@ class TrajectoryPlannerNode(Node):
             'shift',
             'combined',
             'completed',
-            'diagonal'
+            'diagonal',
+            'omnidirectional',
         }
 
-        resolved_targets = []
-
-        for index, command in enumerate(commands, start=1):
-            if 'move_to' not in command:
+        for index, command in enumerate(raw_commands):
+            if not isinstance(command, dict) or 'move_to' not in command:
                 raise ValueError(
-                    f'Command {index} must contain "move_to".'
+                    f'Command {index + 1} must contain "move_to".'
                 )
 
-            move_to = command['move_to']
-
-            pose_name = move_to['pose']
-            trajectory_type = move_to['traj']
-            movement_type = move_to['movement_type']
-
-            if trajectory_type != 'deterministic':
-                raise ValueError(
-                    f'Unsupported trajectory type: {trajectory_type}'
-                )
+            move = command['move_to']
+            pose_name = move.get('pose')
+            movement_type = str(
+                move.get('movement_type', 'omnidirectional')
+            ).strip().lower()
 
             if movement_type not in supported_types:
                 raise ValueError(
-                    f'Unsupported movement type: {movement_type}'
+                    f'Command {index + 1}: unsupported movement type '
+                    f"'{movement_type}'."
                 )
 
             if pose_name not in poses:
-                raise KeyError(
-                    f'Pose "{pose_name}" was not found in poses.json.'
+                raise ValueError(
+                    f'Command {index + 1}: pose "{pose_name}" '
+                    'does not exist in the poses file.'
                 )
 
             pose = poses[pose_name]
 
-            x = float(pose['x'])
-            y = float(pose['y'])
-            yaw = float(pose['yaw'])
-
-            if not all(
-                math.isfinite(value)
-                for value in (x, y, yaw)
-            ):
+            if 'x' not in pose or 'y' not in pose:
                 raise ValueError(
-                    f'Pose "{pose_name}" has invalid coordinates.'
+                    f'Pose "{pose_name}" must contain x and y.'
                 )
 
-            # Implementation assumption:
-            # "completed" means reaching the requested pose.
-            # The current action server implements this as "combined".
-            controller_movement_type = (
-                'combined'
-                if movement_type == 'completed'
-                else movement_type
-            )
+            x = float(pose['x'])
+            y = float(pose['y'])
+            use_target_yaw = 'yaw' in pose
+            yaw = float(pose['yaw']) if use_target_yaw else 0.0
 
-            resolved_targets.append({
-                'name': pose_name,
-                'trajectory_type': trajectory_type,
-                'movement_type': movement_type,
-                'controller_movement_type':
-                    controller_movement_type,
+            if not all(math.isfinite(v) for v in (x, y, yaw)):
+                raise ValueError(
+                    f'Pose "{pose_name}" contains a non-finite value.'
+                )
+
+            if movement_type == 'rotate' and not use_target_yaw:
+                raise ValueError(
+                    f'Rotate command for "{pose_name}" requires a yaw.'
+                )
+
+            # "completed" is retained for compatibility with older JSON.
+            if movement_type == 'completed':
+                movement_type = 'combined'
+
+            self.commands.append({
+                'pose_name': pose_name,
                 'x': x,
                 'y': y,
-                'yaw': yaw
+                'yaw': yaw,
+                'use_target_yaw': use_target_yaw,
+                'movement_type': movement_type,
+                'trajectory_type': move.get('traj', 'deterministic'),
             })
 
-        self.targets = resolved_targets
-
-        self.get_logger().info(
-            'Trajectory: '
-            + trajectory_config.get(
-                'trajectory_name', 'unnamed'
-            )
+        self.trajectory_name = trajectory.get(
+            'trajectory_name', 'unnamed_trajectory'
         )
 
-        for index, target in enumerate(self.targets, start=1):
+        self.get_logger().info(
+            f'Loaded trajectory "{self.trajectory_name}" '
+            f'with {len(self.commands)} commands.'
+        )
+
+    def print_trajectory(self):
+        for index, command in enumerate(self.commands, start=1):
             self.get_logger().info(
-                f'Target {index}: {target["name"]}, '
-                f'traj={target["trajectory_type"]}, '
-                f'movement={target["movement_type"]}, '
-                f'controller mode='
-                f'{target["controller_movement_type"]}, '
-                f'x={target["x"]:.3f}, '
-                f'y={target["y"]:.3f}, '
-                f'yaw={target["yaw"]:.4f}'
+                f'Command {index}: pose={command["pose_name"]}, '
+                f'type={command["movement_type"]}, '
+                f'x={command["x"]:.3f}, y={command["y"]:.3f}, '
+                f'use_target_yaw={command["use_target_yaw"]}'
             )
 
-    def send_next_target(self):
-        if not self.sequence_active:
+    def try_start_execution(self):
+        if self.execution_started:
             return
 
-        if self.target_index >= len(self.targets):
-            self.sequence_active = False
+        if not self.action_client.server_is_ready():
             self.get_logger().info(
-                'All trajectory targets completed successfully.'
+                'Waiting for /execute_trajectory_target...'
             )
             return
 
-        target = self.targets[self.target_index]
+        self.execution_started = True
+        self.start_timer.cancel()
+
+        self.get_logger().info(
+            f'Starting trajectory "{self.trajectory_name}".'
+        )
+        self.send_next_goal()
+
+    def send_next_goal(self):
+        if self.current_index >= len(self.commands):
+            self.get_logger().info(
+                f'Trajectory "{self.trajectory_name}" completed.'
+            )
+            return
+
+        if self.goal_in_progress:
+            return
+
+        command = self.commands[self.current_index]
+
+        target_pose = PoseStamped()
+        target_pose.header.frame_id = 'odom'
+        target_pose.header.stamp = self.get_clock().now().to_msg()
+
+        target_pose.pose.position.x = command['x']
+        target_pose.pose.position.y = command['y']
+        target_pose.pose.position.z = 0.0
+
+        half_yaw = command['yaw'] / 2.0
+        target_pose.pose.orientation.x = 0.0
+        target_pose.pose.orientation.y = 0.0
+        target_pose.pose.orientation.z = math.sin(half_yaw)
+        target_pose.pose.orientation.w = math.cos(half_yaw)
 
         goal = ExecuteTrajectoryTarget.Goal()
-        goal.target_pose = PoseStamped()
+        goal.target_pose = target_pose
+        goal.movement_type = command['movement_type']
+        goal.use_target_yaw = command['use_target_yaw']
 
-        goal.target_pose.header.frame_id = 'odom'
-        goal.target_pose.header.stamp = (
-            self.get_clock().now().to_msg()
-        )
-
-        goal.target_pose.pose.position.x = target['x']
-        goal.target_pose.pose.position.y = target['y']
-        goal.target_pose.pose.position.z = 0.0
-
-        goal.target_pose.pose.orientation.x = 0.0
-        goal.target_pose.pose.orientation.y = 0.0
-        goal.target_pose.pose.orientation.z = math.sin(
-            target['yaw'] / 2.0
-        )
-        goal.target_pose.pose.orientation.w = math.cos(
-            target['yaw'] / 2.0
-        )
-
-        goal.movement_type = target[
-            'controller_movement_type'
-        ]
+        self.goal_in_progress = True
 
         self.get_logger().info(
-            f'Sending target {self.target_index + 1}/'
-            f'{len(self.targets)}: {target["name"]}'
+            f'Sending command {self.current_index + 1}/'
+            f'{len(self.commands)}: {command["pose_name"]} '
+            f'({command["movement_type"]})'
         )
 
         future = self.action_client.send_goal_async(
             goal,
             feedback_callback=self.feedback_callback
         )
-        future.add_done_callback(
-            self.goal_response_callback
-        )
-
-    def feedback_callback(self, feedback_msg):
-        feedback = feedback_msg.feedback
-
-        self.get_logger().info(
-            f'State: {feedback.state}, '
-            f'distance remaining: '
-            f'{feedback.distance_remaining:.3f} m'
-        )
+        future.add_done_callback(self.goal_response_callback)
 
     def goal_response_callback(self, future):
         try:
             goal_handle = future.result()
-        except Exception as error:
-            self.stop_sequence(
-                f'Failed to send target: {error}'
+        except Exception as exc:
+            self.goal_in_progress = False
+            self.get_logger().error(
+                f'Could not send trajectory goal: {exc}'
             )
             return
 
         if not goal_handle.accepted:
-            self.stop_sequence(
-                'The controller rejected the target.'
+            self.goal_in_progress = False
+            self.get_logger().error(
+                f'Command {self.current_index + 1} was rejected.'
             )
             return
 
-        self.get_logger().info(
-            'Target accepted. Waiting for its result.'
-        )
+        self.get_logger().info('Goal accepted by controller.')
 
         result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(
-            self.result_callback
-        )
+        result_future.add_done_callback(self.result_callback)
 
     def result_callback(self, future):
+        self.goal_in_progress = False
+
         try:
-            action_result = future.result()
-            result = action_result.result
-        except Exception as error:
-            self.stop_sequence(
-                f'Failed to receive target result: {error}'
+            wrapped_result = future.result()
+            result = wrapped_result.result
+        except Exception as exc:
+            self.get_logger().error(
+                f'Could not receive trajectory result: {exc}'
             )
             return
 
         if not result.success:
-            self.stop_sequence(
-                f'Target failed: {result.message}'
+            self.get_logger().error(
+                f'Command {self.current_index + 1} failed: '
+                f'{result.message}. Remaining commands stopped.'
             )
             return
 
-        completed = self.targets[self.target_index]
-
         self.get_logger().info(
-            f'Completed target: {completed["name"]}. '
+            f'Command {self.current_index + 1} succeeded: '
             f'{result.message}'
         )
 
-        # Send the next target only after success.
-        self.target_index += 1
-        self.send_next_target()
+        self.current_index += 1
+        self.send_next_goal()
 
-    def stop_sequence(self, reason):
-        self.sequence_active = False
-        self.get_logger().error(
-            f'Trajectory stopped: {reason}'
+    def feedback_callback(self, feedback_message):
+        feedback = feedback_message.feedback
+        self.get_logger().debug(
+            f'State: {feedback.state}; '
+            f'distance remaining: '
+            f'{feedback.distance_remaining:.3f} m'
         )
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = TrajectoryPlannerNode()
+    node = None
 
     try:
+        node = TrajectoryPlannerNode()
         rclpy.spin(node)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        if node is not None:
+            node.destroy_node()
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
     main()
-
-
