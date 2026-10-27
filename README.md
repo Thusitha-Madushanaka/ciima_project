@@ -226,5 +226,4 @@ git commit -m "Describe the change"
 git push
 ```
 
-On a separate test machine, update with `git pull` and rebuild using `colcon build --symlink-install`.
 
