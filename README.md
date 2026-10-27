@@ -30,6 +30,7 @@ Confirm ROS is installed:
 ```bash
 source /opt/ros/humble/setup.bash
 ros2 --help
+echo $ROS_DISTRO
 ```
 
 ### 2.2 Install development and build tools
