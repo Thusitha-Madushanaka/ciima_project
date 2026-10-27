@@ -228,6 +228,3 @@ git push
 
 On a separate test machine, update with `git pull` and rebuild using `colcon build --symlink-install`.
 
-## 9. Access and confidentiality
-
-This project is intended for authorized collaborators. Do not redistribute company code, robot models, or configuration files without the owner's approval. Private repository access must be granted explicitly.
