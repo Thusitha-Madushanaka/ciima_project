@@ -7,8 +7,8 @@
   </description>
   <license>All rights reserved.</license>
 
-  <maintainer email="mattia.deirossi@innobotics.it">Mattia Dei Rossi</maintainer>
-  <maintainer email="alisea.sofia@innobotics.it">Alisea Sofia</maintainer>
+  <maintainer email="thusithamadushanakade@gmail.com">Thusitha Madushanaka</maintainer>
+  
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
