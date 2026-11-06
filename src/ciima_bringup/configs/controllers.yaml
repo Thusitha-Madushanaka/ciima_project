@@ -13,10 +13,10 @@ custom_controller:
   ros__parameters:
 
     wheel_names:
-      - fake_robot_front_steer_joint
-      - fake_robot_rear_steer_joint
-      - fake_robot_front_wheel_joint
-      - fake_robot_rear_wheel_joint
+      - ciima_front_steer_joint
+      - ciima_rear_steer_joint
+      - ciima_front_wheel_joint
+      - ciima_rear_wheel_joint
 
     wheel_offset: 0.0
     wheel_radius: 0.0725
@@ -32,6 +32,6 @@ custom_controller:
     enable_odom_tf: true
 
     odom_frame_id: odom
-    base_frame_id: fake_robot_base_link
+    base_frame_id: ciima_base_link
 
     tf_frame_prefix_enable: false

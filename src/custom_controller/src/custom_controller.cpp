@@ -63,10 +63,10 @@ CustomController::command_interface_configuration() const
     controller_interface::interface_configuration_type::INDIVIDUAL;
 
   config.names = {
-    "fake_robot_front_steer_joint/position",
-    "fake_robot_rear_steer_joint/position",
-    "fake_robot_front_wheel_joint/velocity",
-    "fake_robot_rear_wheel_joint/velocity"
+    "ciima_front_steer_joint/position",
+    "ciima_rear_steer_joint/position",
+    "ciima_front_wheel_joint/velocity",
+    "ciima_rear_wheel_joint/velocity"
   };
 
   return config;
@@ -88,20 +88,20 @@ CustomController::state_interface_configuration() const
   config.names = {
 
     // Front steering
-    "fake_robot_front_steer_joint/position",
-    "fake_robot_front_steer_joint/velocity",
+    "ciima_front_steer_joint/position",
+    "ciima_front_steer_joint/velocity",
 
     // Rear steering
-    "fake_robot_rear_steer_joint/position",
-    "fake_robot_rear_steer_joint/velocity",
+    "ciima_rear_steer_joint/position",
+    "ciima_rear_steer_joint/velocity",
 
     // Front wheel
-    "fake_robot_front_wheel_joint/position",
-    "fake_robot_front_wheel_joint/velocity",
+    "ciima_front_wheel_joint/position",
+    "ciima_front_wheel_joint/velocity",
 
     // Rear wheel
-    "fake_robot_rear_wheel_joint/position",
-    "fake_robot_rear_wheel_joint/velocity"
+    "ciima_rear_wheel_joint/position",
+    "ciima_rear_wheel_joint/velocity"
   };
 
   return config;
@@ -324,7 +324,7 @@ CustomController::update(
 
   odom.header.frame_id = "odom";
 
-  odom.child_frame_id = "fake_robot_base_link";
+  odom.child_frame_id = "ciima_base_link";
 
 
   
@@ -382,7 +382,7 @@ CustomController::update(
 
   transform.header.frame_id = "odom";
 
-  transform.child_frame_id = "fake_robot_base_link";
+  transform.child_frame_id = "ciima_base_link";
 
 
   transform.transform.translation.x = x_;

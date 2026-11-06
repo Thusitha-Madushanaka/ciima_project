@@ -16,7 +16,7 @@ def generate_launch_description():
 
     # Configuration files
     xacro_file = os.path.join(get_package_share_directory('ciima_description'), 'xacro', 'ciima_description.urdf.xacro')
-    robot_description = ParameterValue(Command(['xacro', ' ', xacro_file, ' ', 'prefix:=', 'fake_robot',]),
+    robot_description = ParameterValue(Command(['xacro', ' ', xacro_file, ' ', 'prefix:=', 'ciima',]),
                                      value_type=str)
 
 

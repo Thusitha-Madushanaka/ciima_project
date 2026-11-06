@@ -19,7 +19,7 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_dir, 'xacro', 'ciima_description.urdf.xacro')
     robot_description = Command([FindExecutable(name='xacro'),
                                  ' ', xacro_file,
-                                 ' ', 'prefix:=', 'fake_robot',
+                                 ' ', 'prefix:=', 'ciima',
                                  ])
     rviz_config_path = os.path.join(pkg_dir, 'config', 'config.rviz')
 

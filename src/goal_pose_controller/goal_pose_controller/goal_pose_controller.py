@@ -266,10 +266,10 @@ class GoalPoseController(Node):
             if i >= len(msg.position):
                 continue
 
-            if joint_name == 'fake_robot_front_steer_joint':
+            if joint_name == 'ciima_front_steer_joint':
                 self.front_steer_angle = msg.position[i]
 
-            elif joint_name == 'fake_robot_rear_steer_joint':
+            elif joint_name == 'ciima_rear_steer_joint':
                 self.rear_steer_angle = msg.position[i]
 
     # =========================================================

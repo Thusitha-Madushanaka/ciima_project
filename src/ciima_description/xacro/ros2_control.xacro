@@ -11,13 +11,13 @@
 
     <!-- Steering joints -->
 
-    <joint name="fake_robot_front_steer_joint">
+    <joint name="ciima_front_steer_joint">
       <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
 
-    <joint name="fake_robot_rear_steer_joint">
+    <joint name="ciima_rear_steer_joint">
       <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
@@ -25,13 +25,13 @@
 
     <!-- Wheel joints -->
 
-    <joint name="fake_robot_front_wheel_joint">
+    <joint name="ciima_front_wheel_joint">
       <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
 
-    <joint name="fake_robot_rear_wheel_joint">
+    <joint name="ciima_rear_wheel_joint">
       <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
