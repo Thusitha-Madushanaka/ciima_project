@@ -1,0 +1,543 @@
+import sys
+import math
+import json
+import time
+from pathlib import Path
+
+import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionClient
+
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped
+from trajectory_interfaces.action import ExecuteTrajectoryTarget
+from action_msgs.msg import GoalStatus
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
+    QApplication,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
+
+
+POSES_FILE = Path.home() / "ros2_ws/trajectory_config/poses.json"
+
+DESTINATIONS = {
+    "A": "move_to_A",
+    "B": "move_to_B",
+    "C": "move_to_C",
+    "D": "move_to_D",
+    "Home": "move_to_home",
+}
+
+
+class RobotGuiNode(Node):
+
+    def __init__(self, position_cb, status_cb, feedback_cb):
+        super().__init__("robot_control_gui")
+
+        self.position_cb = position_cb
+        self.status_cb = status_cb
+        self.feedback_cb = feedback_cb
+
+        self.action_client = ActionClient(
+            self,
+            ExecuteTrajectoryTarget,
+            "/execute_trajectory_target"
+        )
+
+        self.subscription = self.create_subscription(
+            Odometry,
+            "/odom",
+            self.odom_callback,
+            10
+        )
+
+        self.goal_active = False
+        self.goal_handle = None
+        self.goal_future = None
+        self.result_future = None
+        self.cancel_future = None
+        self.cancel_requested = False
+        self.current_destination = None
+
+    def odom_callback(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+
+        q = msg.pose.pose.orientation
+
+        sin_yaw = 2.0 * (q.w * q.z + q.x * q.y)
+        cos_yaw = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+
+        yaw = math.atan2(sin_yaw, cos_yaw)
+
+        self.position_cb(x, y, math.degrees(yaw))
+
+    def load_destination(self, destination):
+        pose_name = DESTINATIONS[destination]
+
+        with POSES_FILE.open("r", encoding="utf-8") as file:
+            config = json.load(file)
+
+        pose = config["poses"][pose_name]
+
+        x = float(pose["x"])
+        y = float(pose["y"])
+        yaw = float(pose.get("yaw", 0.0))
+
+        if not all(math.isfinite(v) for v in (x, y, yaw)):
+            raise ValueError("Destination contains non-finite coordinates")
+
+        return x, y, yaw, "yaw" in pose
+
+    def send_destination(self, destination):
+        if self.goal_active:
+            self.status_cb(
+                "Busy",
+                "Another GUI goal is already active."
+            )
+            return
+
+        if not self.action_client.server_is_ready():
+            self.status_cb(
+                "Error",
+                "Trajectory action server is unavailable."
+            )
+            return
+
+        try:
+            x, y, yaw, use_yaw = self.load_destination(destination)
+        except (OSError, KeyError, ValueError, TypeError) as exc:
+            self.status_cb(
+                "Error",
+                f"Could not load destination: {exc}"
+            )
+            return
+
+        goal = ExecuteTrajectoryTarget.Goal()
+        target = PoseStamped()
+
+        target.header.frame_id = "odom"
+        target.header.stamp = self.get_clock().now().to_msg()
+
+        target.pose.position.x = x
+        target.pose.position.y = y
+        target.pose.position.z = 0.0
+
+        # Convert yaw to a quaternion
+        target.pose.orientation.x = 0.0
+        target.pose.orientation.y = 0.0
+        target.pose.orientation.z = math.sin(yaw / 2.0)
+        target.pose.orientation.w = math.cos(yaw / 2.0)
+
+        goal.target_pose = target
+        goal.movement_type = "omnidirectional"
+        goal.use_target_yaw = use_yaw
+
+        self.goal_active = True
+        self.goal_handle = None
+        self.cancel_requested = False
+        self.current_destination = destination
+
+        self.status_cb(
+            "Sending Goal",
+            f"Sending {destination}: X={x:.2f}, Y={y:.2f}, "
+            f"Yaw={yaw:.2f} rad"
+        )
+
+        try:
+            self.goal_future = self.action_client.send_goal_async(
+                goal,
+                feedback_callback=self.on_feedback
+            )
+            self.goal_future.add_done_callback(self.on_goal_response)
+
+        except Exception as exc:
+            self.finish_goal(
+                "Error",
+                f"Could not send goal: {exc}"
+            )
+
+    def on_goal_response(self, future):
+        try:
+            handle = future.result()
+
+            if not handle.accepted:
+                self.finish_goal(
+                    "Goal Rejected",
+                    "The action server rejected the goal."
+                )
+                return
+
+            self.goal_handle = handle
+
+            self.result_future = handle.get_result_async()
+            self.result_future.add_done_callback(self.on_goal_result)
+
+            if self.cancel_requested:
+                self.request_cancel()
+            else:
+                self.status_cb(
+                    "Moving",
+                    f"Moving to {self.current_destination}"
+                )
+
+        except Exception as exc:
+            self.finish_goal(
+                "Error",
+                f"Goal response error: {exc}"
+            )
+
+    def on_feedback(self, feedback_msg):
+        if not self.goal_active or self.cancel_requested:
+            return
+
+        feedback = feedback_msg.feedback
+
+        self.feedback_cb(
+            self.current_destination,
+            feedback.state,
+            feedback.distance_remaining
+        )
+
+    def stop_motion(self):
+        if not self.goal_active:
+            self.status_cb(
+                "No Active Goal",
+                "No GUI-controlled goal to cancel. "
+                "This does not confirm that the robot is stopped."
+            )
+            return
+
+        if self.cancel_requested:
+            self.status_cb(
+                "Cancel Pending",
+                "Waiting for the action server to process cancellation."
+            )
+            return
+
+        self.cancel_requested = True
+
+        self.status_cb(
+            "Cancel Requested",
+            "Requesting action cancellation. "
+            "Physical stopping is not yet confirmed."
+        )
+
+        if self.goal_handle is not None:
+            self.request_cancel()
+
+    def request_cancel(self):
+        if self.goal_handle is None:
+            return
+
+        try:
+            self.cancel_future = self.goal_handle.cancel_goal_async()
+            self.cancel_future.add_done_callback(
+                self.on_cancel_response
+            )
+
+        except Exception as exc:
+            self.status_cb(
+                "Stop Error",
+                f"Cancellation request failed: {exc}"
+            )
+
+    def on_cancel_response(self, future):
+        try:
+            response = future.result()
+
+            if response.goals_canceling:
+                self.status_cb(
+                    "Cancel Accepted",
+                    "Action server accepted cancellation request. "
+                    "Waiting for the final result."
+                )
+            else:
+                self.status_cb(
+                    "Stop Error",
+                    "Action server did not accept cancellation. "
+                    "Use an independent stop mechanism."
+                )
+
+        except Exception as exc:
+            self.status_cb(
+                "Stop Error",
+                f"Cancellation response error: {exc}"
+            )
+
+    def on_goal_result(self, future):
+        try:
+            response = future.result()
+            result = response.result
+            status = response.status
+
+            if (
+                status == GoalStatus.STATUS_SUCCEEDED
+                and result.success
+            ):
+                self.finish_goal(
+                    "Goal Reached",
+                    result.message or
+                    f"{self.current_destination} reached successfully."
+                )
+
+            elif status == GoalStatus.STATUS_CANCELED:
+                self.finish_goal(
+                    "Canceled",
+                    result.message or
+                    "Action canceled. Verify that the robot is stationary."
+                )
+
+            else:
+                self.finish_goal(
+                    "Error",
+                    result.message or
+                    f"Action ended with status {status}."
+                )
+
+        except Exception as exc:
+            self.finish_goal(
+                "Error",
+                f"Result error: {exc}"
+            )
+
+    def finish_goal(self, status, message):
+        self.goal_active = False
+        self.goal_handle = None
+        self.goal_future = None
+        self.result_future = None
+        self.cancel_future = None
+        self.cancel_requested = False
+        self.current_destination = None
+
+        self.status_cb(status, message)
+
+
+class RobotControlWindow(QMainWindow):
+
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("InnoBoTics | Robot Control Dashboard")
+        self.resize(900, 700)
+
+        self.last_odom_time = None
+
+        central_widget = QWidget()
+        main_layout = QVBoxLayout(central_widget)
+
+        title = QLabel("InnoBoTics | Robot Control Dashboard")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(
+            "font-size: 24px; font-weight: bold; padding: 8px;"
+        )
+        main_layout.addWidget(title)
+
+        status_layout = QHBoxLayout()
+
+        self.connection_label = QLabel("ROS 2: Waiting for /odom")
+        self.robot_status_label = QLabel("Robot Status: Idle")
+
+        status_layout.addWidget(self.connection_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.robot_status_label)
+
+        main_layout.addLayout(status_layout)
+
+        destination_group = QGroupBox("Robot Navigation")
+        destination_layout = QGridLayout(destination_group)
+
+        self.destination_buttons = {}
+
+        for index, destination in enumerate(["A", "B", "C", "D"]):
+            button = QPushButton(f"Move to {destination}")
+            button.setMinimumHeight(55)
+
+            button.clicked.connect(
+                lambda checked=False, name=destination:
+                self.move_to_destination(name)
+            )
+
+            destination_layout.addWidget(
+                button, index // 2, index % 2
+            )
+
+            self.destination_buttons[destination] = button
+
+        self.home_button = QPushButton("Return to Home")
+        self.home_button.setMinimumHeight(45)
+        self.home_button.clicked.connect(
+            lambda: self.move_to_destination("Home")
+        )
+
+        destination_layout.addWidget(
+            self.home_button, 2, 0, 1, 2
+        )
+
+        main_layout.addWidget(destination_group)
+
+        # Software stop: ROS 2 action cancellation only
+        self.stop_button = QPushButton(
+            "SOFTWARE STOP — CANCEL ACTIVE GOAL"
+        )
+        self.stop_button.setMinimumHeight(55)
+        self.stop_button.setStyleSheet(
+            "background-color: #B42318;"
+            "color: white;"
+            "font-weight: bold;"
+            "font-size: 16px;"
+        )
+
+        self.stop_button.clicked.connect(self.stop_robot)
+        main_layout.addWidget(self.stop_button)
+
+        stop_note = QLabel(
+            "Not a safety-rated emergency stop. "
+            "Cancellation depends on the action server."
+        )
+        stop_note.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(stop_note)
+
+        odom_group = QGroupBox("Robot Position (/odom)")
+        odom_layout = QGridLayout(odom_group)
+
+        self.x_label = QLabel("X: Waiting for data...")
+        self.y_label = QLabel("Y: Waiting for data...")
+        self.yaw_label = QLabel("Yaw: Waiting for data...")
+
+        odom_layout.addWidget(self.x_label, 0, 0)
+        odom_layout.addWidget(self.y_label, 0, 1)
+        odom_layout.addWidget(self.yaw_label, 0, 2)
+
+        main_layout.addWidget(odom_group)
+
+        progress_group = QGroupBox("Trajectory Progress")
+        progress_layout = QVBoxLayout(progress_group)
+
+        self.progress_label = QLabel("Waiting for trajectory")
+        self.progress_label.setWordWrap(True)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+
+        progress_layout.addWidget(self.progress_label)
+        progress_layout.addWidget(self.progress_bar)
+
+        main_layout.addWidget(progress_group)
+        main_layout.addStretch()
+
+        self.setCentralWidget(central_widget)
+
+        self.ros_node = RobotGuiNode(
+            self.update_position,
+            self.update_status,
+            self.update_feedback
+        )
+
+        self.ros_timer = QTimer(self)
+        self.ros_timer.timeout.connect(self.process_ros_messages)
+        self.ros_timer.start(50)
+
+    def move_to_destination(self, destination):
+        self.ros_node.send_destination(destination)
+
+    def stop_robot(self):
+        self.ros_node.stop_motion()
+
+    def update_position(self, x, y, yaw):
+        self.last_odom_time = time.monotonic()
+
+        self.x_label.setText(f"X: {x:.3f} m")
+        self.y_label.setText(f"Y: {y:.3f} m")
+        self.yaw_label.setText(f"Yaw: {yaw:.2f}°")
+
+        self.connection_label.setText("ROS 2: Receiving /odom")
+
+    def update_status(self, status, message):
+        self.robot_status_label.setText(f"Robot Status: {status}")
+        self.progress_label.setText(message)
+
+        active = self.ros_node.goal_active
+
+        for button in self.destination_buttons.values():
+            button.setEnabled(not active)
+
+        self.home_button.setEnabled(not active)
+
+        if active:
+            # The action feedback has distance, not a percentage.
+            self.progress_bar.setRange(0, 0)
+
+        elif status == "Goal Reached":
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(100)
+
+        else:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+
+    def update_feedback(self, destination, state, distance):
+        self.robot_status_label.setText(f"Robot Status: {state}")
+
+        self.progress_label.setText(
+            f"Destination: {destination} | "
+            f"State: {state} | "
+            f"Distance remaining: {distance:.3f} m"
+        )
+
+    def process_ros_messages(self):
+        rclpy.spin_once(
+            self.ros_node,
+            timeout_sec=0.0
+        )
+
+        if self.last_odom_time is not None:
+            elapsed = time.monotonic() - self.last_odom_time
+
+            if elapsed > 2.0:
+                self.connection_label.setText(
+                    "ROS 2: /odom data timeout"
+                )
+
+    def closeEvent(self, event):
+        if self.ros_node.goal_active:
+            self.progress_label.setText(
+                "An action is still active. "
+                "Verify safe stopping before closing."
+            )
+            event.ignore()
+            return
+
+        self.ros_timer.stop()
+        self.ros_node.destroy_node()
+        event.accept()
+
+
+def main():
+    rclpy.init(args=None)
+
+    app = QApplication(sys.argv)
+    window = RobotControlWindow()
+    window.show()
+
+    exit_code = app.exec()
+
+    if rclpy.ok():
+        rclpy.shutdown()
+
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()
