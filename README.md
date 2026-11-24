@@ -149,7 +149,7 @@ cd ~/workspace_name
 source /opt/ros/humble/setup.bash
 source ~/robot_gui_env/bin/activate
 source install/setup.bash
-python3 <file_name> ## In this case: /home/thusitha_madushanaka/ros2_ws/src/robot_control_gui/robot_control_gui/main_window.py
+python3 <file_name> ## In this case: <replace with your workpath>/ros2_ws/src/robot_control_gui/robot_control_gui/main_window.py
 ```
 
 
