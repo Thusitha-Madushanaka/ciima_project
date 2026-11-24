@@ -140,6 +140,19 @@ ros2 run trajectory_planner trajectory_planner
 
 The current planner uses `execute_on_start=True` and automatically sends the trajectory once the `/execute_trajectory_target` action server is ready.
 
+## 7. Launch the GUI (Graphical User Interface)
+
+In **Terminal 3**:
+
+```bash
+cd ~/workspace_name
+source /opt/ros/humble/setup.bash
+source ~/robot_gui_env/bin/activate
+source install/setup.bash
+python3 <file_name> ## In this case: /home/thusitha_madushanaka/ros2_ws/src/robot_control_gui/robot_control_gui/main_window.py
+```
+
+
 
 **ENJOY the CIIMA ROBOT**
 
