@@ -143,5 +143,5 @@ The current planner uses `execute_on_start=True` and automatically sends the tra
 
 **ENJOY the CIIMA ROBOT**
 
-**Made by: Thusitha Madushanaka @ InnoBotics**
+**Made by: Thusitha Madushanaka | InnoBotics**
 **@All right reserved**

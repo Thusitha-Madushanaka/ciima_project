@@ -285,7 +285,7 @@ class RobotControlWindow(QMainWindow):
         heading.addWidget(make_label('InnoBoTics', 'muted'))
         header.addLayout(heading)
         header.addStretch()
-        self.connection_label = make_label('● Waiting for /odom', size=14)
+        self.connection_label = make_label('Waiting for /odom', size=14)
         header.addWidget(self.connection_label)
         root.addLayout(header)
 
@@ -325,7 +325,7 @@ class RobotControlWindow(QMainWindow):
         self.home_button.setMinimumHeight(56)
         self.home_button.clicked.connect(lambda: self.move_to_destination('Home'))
         nav.addWidget(self.home_button)
-        self.stop_button = QPushButton('⛔  Software Stop — Cancel Active Goal')
+        self.stop_button = QPushButton('EMERGENCY STOP')
         self.stop_button.setObjectName('stopButton')
         self.stop_button.setMinimumHeight(65)
         self.stop_button.clicked.connect(self.stop_robot)
