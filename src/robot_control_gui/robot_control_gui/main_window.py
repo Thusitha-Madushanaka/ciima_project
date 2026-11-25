@@ -134,9 +134,9 @@ def make_panel(title):
     return frame, layout
 
 
-# ============================================================
+
 # ROS 2 COMMUNICATION NODE
-# ============================================================
+
 
 class RobotGuiNode(Node):
 
@@ -178,9 +178,9 @@ class RobotGuiNode(Node):
         self.target_distance = None
         self.cancel_response_pending = False
 
-    # --------------------------------------------------------
+    
     # Receive robot odometry
-    # --------------------------------------------------------
+    
 
     def odom_callback(self, msg):
 
@@ -204,9 +204,9 @@ class RobotGuiNode(Node):
             yaw
         )
 
-    # --------------------------------------------------------
+    
     # Read destination from poses.json
-    # --------------------------------------------------------
+    
 
     def load_destination(self, destination):
 
@@ -232,9 +232,9 @@ class RobotGuiNode(Node):
 
         return x, y, yaw, 'yaw' in pose
 
-    # --------------------------------------------------------
+    
     # Send navigation goal
-    # --------------------------------------------------------
+    
 
     def send_destination(self, destination):
 
@@ -347,9 +347,9 @@ class RobotGuiNode(Node):
                 f'Goal send failed: {exc}'
             )
 
-    # --------------------------------------------------------
+    
     # Receive goal response
-    # --------------------------------------------------------
+    
 
     def on_goal_response(self, future):
 
@@ -398,9 +398,9 @@ class RobotGuiNode(Node):
                 f'Goal response failed: {exc}'
             )
 
-    # --------------------------------------------------------
+    
     # Receive motion feedback
-    # --------------------------------------------------------
+    
 
     def on_feedback(self, feedback_msg):
 
@@ -418,9 +418,9 @@ class RobotGuiNode(Node):
             float(feedback.distance_remaining)
         )
 
-    # --------------------------------------------------------
+    
     # Software stop
-    # --------------------------------------------------------
+    
 
     def stop_motion(self):
 
@@ -538,9 +538,9 @@ class RobotGuiNode(Node):
                 'Cancellation response error'
             )
 
-    # --------------------------------------------------------
+    
     # Receive final action result
-    # --------------------------------------------------------
+    
 
     def on_goal_result(self, future):
 
@@ -615,9 +615,9 @@ class RobotGuiNode(Node):
         self.target_distance = None
 
 
-# ============================================================
+
 # GRAPHICAL USER INTERFACE
-# ============================================================
+
 
 class RobotControlWindow(QMainWindow):
 
@@ -651,9 +651,9 @@ class RobotControlWindow(QMainWindow):
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(16)
 
-        # ----------------------------------------------------
+        
         # Header
-        # ----------------------------------------------------
+        
 
         header = QHBoxLayout()
         heading = QVBoxLayout()
@@ -686,9 +686,9 @@ class RobotControlWindow(QMainWindow):
 
         root.addLayout(header)
 
-        # ----------------------------------------------------
+        
         # Robot status
-        # ----------------------------------------------------
+        
 
         stats = QGridLayout()
         stats.setHorizontalSpacing(20)
@@ -728,9 +728,9 @@ class RobotControlWindow(QMainWindow):
 
         root.addLayout(stats)
 
-        # ----------------------------------------------------
+        
         # Navigation control: A, B, C, D, E, F, G
-        # ----------------------------------------------------
+        
 
         nav_panel, nav = make_panel(
             'Navigation control'
@@ -810,9 +810,9 @@ class RobotControlWindow(QMainWindow):
 
         root.addWidget(nav_panel)
 
-        # ----------------------------------------------------
+        
         # Live odometry
-        # ----------------------------------------------------
+        
 
         metrics = QGridLayout()
         metrics.setSpacing(12)
@@ -847,9 +847,9 @@ class RobotControlWindow(QMainWindow):
             0
         )
 
-        # ----------------------------------------------------
+        
         # Motion progress
-        # ----------------------------------------------------
+        
 
         progress_panel, progress = make_panel(
             'Motion progress'
@@ -944,9 +944,9 @@ class RobotControlWindow(QMainWindow):
 
         root.addLayout(metrics)
 
-        # ----------------------------------------------------
+        
         # Event log
-        # ----------------------------------------------------
+        
 
         log_panel, log_layout = make_panel(
             'Event log'
@@ -972,9 +972,9 @@ class RobotControlWindow(QMainWindow):
 
         self.setCentralWidget(scroll)
 
-        # ----------------------------------------------------
+        
         # Initialize ROS 2 node
-        # ----------------------------------------------------
+        
 
         self.ros_node = RobotGuiNode(
             self.update_position,
@@ -1009,9 +1009,9 @@ class RobotControlWindow(QMainWindow):
 
         self.update_health()
 
-    # --------------------------------------------------------
+    
     # Create metric labels
-    # --------------------------------------------------------
+    
 
     def add_metric(self, layout, name, initial):
 
@@ -1028,9 +1028,9 @@ class RobotControlWindow(QMainWindow):
 
         return label
 
-    # --------------------------------------------------------
+    
     # Event logging
-    # --------------------------------------------------------
+   
 
     def add_event(self, message):
 
@@ -1042,9 +1042,9 @@ class RobotControlWindow(QMainWindow):
             f'{timestamp}  {message}'
         )
 
-    # --------------------------------------------------------
+    
     # Destination button callback
-    # --------------------------------------------------------
+    
 
     def move_to_destination(self, destination):
 
@@ -1052,17 +1052,17 @@ class RobotControlWindow(QMainWindow):
             destination
         )
 
-    # --------------------------------------------------------
+    
     # Software stop callback
-    # --------------------------------------------------------
+    
 
     def stop_robot(self):
 
         self.ros_node.stop_motion()
 
-    # --------------------------------------------------------
+    
     # Update live robot position
-    # --------------------------------------------------------
+    
 
     def update_position(self, x, y, yaw):
 
@@ -1080,9 +1080,9 @@ class RobotControlWindow(QMainWindow):
             f'{yaw:.1f}°'
         )
 
-    # --------------------------------------------------------
+    
     # Update robot state
-    # --------------------------------------------------------
+    
 
     def update_status(
         self,
@@ -1155,9 +1155,9 @@ class RobotControlWindow(QMainWindow):
             not active
         )
 
-    # --------------------------------------------------------
+    
     # Update motion feedback
-    # --------------------------------------------------------
+    
 
     def update_feedback(
         self,
@@ -1207,9 +1207,9 @@ class RobotControlWindow(QMainWindow):
 
             self.state_label.setText('ERROR')
 
-    # --------------------------------------------------------
+    
     # Update connection and controller status
-    # --------------------------------------------------------
+    
 
     def update_health(self):
 
@@ -1273,9 +1273,9 @@ class RobotControlWindow(QMainWindow):
                 f'{elapsed:.1f} s'
             )
 
-    # --------------------------------------------------------
+    
     # Close GUI
-    # --------------------------------------------------------
+    
 
     def closeEvent(self, event):
 
@@ -1298,9 +1298,8 @@ class RobotControlWindow(QMainWindow):
         event.accept()
 
 
-# ============================================================
-# MAIN FUNCTION
-# ============================================================
+
+
 
 def main():
 
